@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .progress-bar-65 {
+    width: 65%;
+  }
+  
+  .usage-bar {
+    width: var(--usage-width);
+  }
+} 
