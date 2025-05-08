@@ -194,83 +194,50 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(mockSubscriptions);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const router = useRouter();
 
   useEffect(() => {
+    // 로그인하지 않은 사용자는 즉시 리디렉션
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    
+    // 기본 프로필 생성
+    const createBasicProfile = () => {
+      setProfile({
+        id: user.id,
+        email: user.email || '',
+        username: user.email?.split('@')[0] || '사용자',
+        avatar_url: null
+      });
+    };
+
     async function loadProfile() {
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-      
       try {
-        setLoading(true);
-        setError(null);
-        
         const supabase = createSupabaseClient();
+        setLoading(true);
         
-        // 프로필 테이블이 존재하는지 확인
-        try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-          
-          if (error) {
-            if (error.code === 'PGRST116') {
-              // 프로필이 없는 경우 기본 프로필 생성
-              const { data: newProfile, error: createError } = await supabase
-                .from('profiles')
-                .upsert({
-                  id: user.id,
-                  email: user.email,
-                  username: user.email?.split('@')[0] || '사용자',
-                  updated_at: new Date().toISOString(),
-                })
-                .select()
-                .single();
-                
-              if (createError) {
-                throw createError;
-              }
-              
-              setProfile(newProfile);
-            } else if (error.code === '42P01' || error.message.includes('does not exist')) {
-              // 테이블이 없는 경우 임시 프로필 데이터 사용
-              console.log('프로필 테이블이 없습니다. 임시 데이터를 사용합니다.');
-              setProfile({
-                id: user.id,
-                email: user.email || '',
-                username: user.email?.split('@')[0] || '사용자',
-                avatar_url: null
-              });
-            } else {
-              throw error;
-            }
-          } else {
-            setProfile(data);
-          }
-        } catch (error: any) {
-          if (error.code === '42P01' || error.message.includes('does not exist')) {
-            // 테이블이 없는 경우 임시 프로필 데이터 사용
-            console.log('프로필 테이블이 없습니다. 임시 데이터를 사용합니다.');
-            setProfile({
-              id: user.id,
-              email: user.email || '',
-              username: user.email?.split('@')[0] || '사용자',
-              avatar_url: null
-            });
-          } else {
-            throw error;
-          }
+        // 프로필 조회 시도
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (error) {
+          // 오류 발생 시 기본 프로필 사용
+          createBasicProfile();
+          return;
         }
+        
+        setProfile(data);
       } catch (error: any) {
-        console.error('프로필 불러오기 오류:', error?.message || error);
-        setError(error?.message || '프로필을 불러오는 중 오류가 발생했습니다');
+        // 오류 발생 시 기본 프로필 사용
+        createBasicProfile();
       } finally {
         setLoading(false);
       }
