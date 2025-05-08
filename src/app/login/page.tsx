@@ -37,7 +37,7 @@ export default function LoginPage() {
         // 이미 로그인한 사용자는 대시보드로 리디렉션
         const { session } = await getCurrentSession();
         if (session) {
-          router.replace("/dashboard");
+          window.location.href = "/dashboard";
         }
       } catch (error) {
         console.error("로그인 페이지 초기화 중 오류:", error);
@@ -71,8 +71,12 @@ export default function LoginPage() {
       }
       
       if (data?.session) {
-        // 성공 시 즉시 대시보드로 리디렉션 (replace 사용)
-        router.replace("/dashboard");
+        // 성공 시 즉시 대시보드로 리디렉션 (window.location 사용)
+        setSuccessMessage("로그인 성공! 대시보드로 이동합니다...");
+        // 약간의 지연 후 리디렉션 (성공 메시지가 보이도록)
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 100);
       } else {
         setErrorMessage("로그인은 성공했지만 세션을 생성하지 못했습니다. 다시 시도해주세요.");
         setIsLoading(false);

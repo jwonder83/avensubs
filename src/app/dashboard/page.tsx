@@ -202,7 +202,7 @@ export default function Dashboard() {
   useEffect(() => {
     // 로그인하지 않은 사용자는 즉시 리디렉션
     if (!user) {
-      router.replace('/login');
+      window.location.href = '/login';
       return;
     }
     
