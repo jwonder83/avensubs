@@ -16,23 +16,8 @@ export default function LoginPage() {
   const [activeTab, setActiveTab] = useState("credentials");
   const router = useRouter();
 
-  // 페이지 로드 시 환경 변수 체크 및 세션 정리
+  // 페이지 로드 시 세션 확인
   useEffect(() => {
-    // 환경 변수 체크
-    const checkEnvVars = () => {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.error("중요: Supabase 환경 변수가 설정되지 않았습니다!");
-        console.error("URL:", supabaseUrl ? "[설정됨]" : "[설정되지 않음]");
-        console.error("ANON_KEY:", supabaseAnonKey ? "[설정됨]" : "[설정되지 않음]");
-        setErrorMessage("서버 설정 오류가 발생했습니다. 관리자에게 문의해주세요.");
-      }
-    };
-    
-    checkEnvVars();
-    
     const checkAndCleanupSession = async () => {
       try {
         // URL에서 오류 메시지 체크
@@ -50,11 +35,8 @@ export default function LoginPage() {
         await cleanupAuth();
         
         // 이미 로그인한 사용자는 대시보드로 리디렉션
-        const { session, error: sessionError } = await getCurrentSession();
-        if (sessionError) {
-          console.error("세션 확인 중 오류:", sessionError);
-        } else if (session) {
-          console.log("유효한 세션 발견, 대시보드로 리디렉션");
+        const { session } = await getCurrentSession();
+        if (session) {
           router.push("/dashboard");
         }
       } catch (error) {
@@ -80,46 +62,19 @@ export default function LoginPage() {
     setSuccessMessage(null);
     
     try {
-      console.log("로그인 시작...");
-      
-      // Supabase 환경 변수 확인
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        throw new Error("Supabase 환경 변수가 설정되지 않았습니다");
-      }
-      
-      // 이메일/비밀번호 로그인 시도 (자동 재시도 로직 포함)
+      // 이메일/비밀번호 로그인 시도
       const { data, error } = await signInUser(email, password);
       
       if (error) {
-        console.error("로그인 오류 발생:", error);
-        
-        // 오류 유형별 메시지 처리
-        if (error.message?.includes("Invalid login") || error.message?.includes("올바르지 않습니다")) {
-          setErrorMessage("이메일 또는 비밀번호가 올바르지 않습니다.");
-        } else if (error.message?.includes("Email not confirmed") || error.message?.includes("이메일 인증")) {
-          setErrorMessage("이메일 인증이 완료되지 않았습니다. 이메일을 확인해주세요.");
-        } else if (error.message?.includes("rate limit") || error.message?.includes("요청 제한") || error.message?.includes("너무 많은 로그인")) {
-          setErrorMessage("너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.");
-          console.warn("요청 제한에 도달했습니다. 잠시 후 다시 시도하세요.");
-        } else if (error.message?.includes("환경 변수")) {
-          setErrorMessage("서버 설정 오류가 발생했습니다. 관리자에게 문의해주세요.");
-        } else {
-          setErrorMessage(`로그인 실패: ${error.message}`);
-        }
+        setErrorMessage(error.message);
         setIsLoading(false);
         return;
       }
       
       if (data?.session) {
         setSuccessMessage("로그인 성공! 대시보드로 이동합니다...");
-        console.log("로그인 성공, 세션 생성됨");
-        
-        // 짧은 지연 후 리다이렉션 (성공 메시지 표시를 위해)
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 800);
+        router.push("/dashboard");
       } else {
-        console.error("세션 생성 실패");
         setErrorMessage("로그인은 성공했지만 세션을 생성하지 못했습니다. 다시 시도해주세요.");
         setIsLoading(false);
       }
@@ -136,15 +91,10 @@ export default function LoginPage() {
     setErrorMessage(null);
     
     try {
-      const { error } = await signInWithOAuthProvider(provider);
-      
-      if (error) {
-        setErrorMessage(`${provider} 로그인 실패: ${error.message}`);
-      }
+      await signInWithOAuthProvider(provider);
       // 성공 시 리디렉션은 OAuth 프로세스에서 자동 처리
     } catch (error: any) {
       setErrorMessage(`${provider} 로그인 중 오류가 발생했습니다: ${error.message}`);
-    } finally {
       setIsLoading(false);
     }
   };

@@ -10,8 +10,6 @@ export const createSupabaseClient = () => {
   
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Supabase 환경 변수가 설정되지 않았습니다.");
-    console.error("URL:", supabaseUrl ? "[설정됨]" : "[설정되지 않음]");
-    console.error("ANON_KEY:", supabaseAnonKey ? "[설정됨]" : "[설정되지 않음]");
   }
   
   return createClientComponentClient({
@@ -21,24 +19,11 @@ export const createSupabaseClient = () => {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
       },
       global: {
         headers: {
           'X-Client-Info': 'supabase-js-client'
-        },
-        // 네트워크 오류에 대한 자동 재시도 옵션
-        fetch: (url, options) => {
-          return fetch(url, {
-            ...options,
-            // AbortController 설정으로 요청 타임아웃 관리
-            signal: options?.signal || new AbortController().signal
-          });
         }
-      },
-      // 타임아웃 옵션 설정 (기본 10초)
-      realtime: {
-        timeout: 10000
       }
     }
   });
@@ -123,22 +108,16 @@ export const isSessionValid = async (): Promise<{
 export const cleanupAuth = async (): Promise<void> => {
   try {
     const { valid } = await isSessionValid();
-    if (!valid) {
-      // 세션이 유효하지 않으면 로컬 스토리지 데이터 정리
-      if (typeof window !== "undefined" && window.localStorage) {
-        // 모든 Supabase 관련 항목 탐색 및 제거
-        const keys = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('supabase.auth.')) {
-            keys.push(key);
-          }
+    if (!valid && typeof window !== "undefined") {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('supabase.auth.')) {
+          keys.push(key);
         }
-        
-        // 배열에 저장한 키들을 삭제 (루프 도중 삭제하면 인덱스가 변경될 수 있음)
-        keys.forEach(key => localStorage.removeItem(key));
-        console.log("만료된 세션 정리 완료:", keys.length, "개 항목 삭제");
       }
+      
+      keys.forEach(key => localStorage.removeItem(key));
     }
   } catch (error) {
     console.error("인증 데이터 정리 중 오류:", error);
@@ -154,15 +133,15 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  * 사용자 로그인을 처리합니다. Rate limit 발생 시 자동 재시도를 수행합니다.
  * @param email 사용자 이메일
  * @param password 사용자 비밀번호
- * @param retries 재시도 횟수 (기본값: 2)
- * @param delay 재시도 간 대기 시간(ms) (기본값: 2000)
+ * @param retries 재시도 횟수 (기본값: 1)
+ * @param delay 재시도 간 대기 시간(ms) (기본값: 1000)
  * @returns 로그인 결과와 오류 정보
  */
 export const signInUser = async (
   email: string,
   password: string,
-  retries = 2,
-  delay = 2000
+  retries = 1,
+  delay = 1000
 ): Promise<{
   data: { user: User | null; session: Session | null } | null;
   error: Error | PostgrestError | null;
@@ -185,9 +164,6 @@ export const signInUser = async (
         await wait(delay);
       }
       
-      // 로그인 시도 전 클라이언트 로그 
-      console.log(`로그인 시도 (${attempt+1}/${retries+1}):`, email);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -199,8 +175,6 @@ export const signInUser = async (
           console.warn("요청 제한 도달, 잠시 후 재시도합니다...");
           continue; // 다음 반복으로 진행
         }
-        
-        console.error("로그인 오류:", error.message, error);
         
         // 자세한 오류 메시지
         if (error.message?.includes("Invalid login")) {
@@ -214,7 +188,6 @@ export const signInUser = async (
         return { data: null, error };
       }
       
-      console.log("로그인 성공:", data.user?.email);
       return { data, error: null };
     } catch (error) {
       // 마지막 시도에서만 오류 반환
@@ -257,34 +230,21 @@ export const signOutUser = async (): Promise<{
 };
 
 /**
- * OAuth 제공자를 통한 로그인을 처리합니다.
+ * OAuth 제공자를 통해 로그인합니다.
  * @param provider OAuth 제공자 (google, github 등)
- * @returns OAuth 로그인 결과와 오류 정보
+ * @returns 로그인 결과와 오류 정보
  */
 export const signInWithOAuthProvider = async (
   provider: "google" | "github"
-): Promise<{
-  error: Error | null;
-}> => {
+): Promise<void> => {
   const supabase = createSupabaseClient();
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    
-    if (error) {
-      console.error(`${provider} 로그인 오류:`, error.message);
-      return { error };
+  
+  await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`
     }
-    
-    return { error: null };
-  } catch (error) {
-    console.error(`${provider} 로그인 중 예외 발생:`, error);
-    return { error: error as Error };
-  }
+  });
 };
 
 /**
